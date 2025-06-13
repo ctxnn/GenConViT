@@ -39,9 +39,6 @@ def faceforensics(ed_weight, vae_weight, root_dir="FaceForensics++", dataset=Non
     result = set_result()
     result["video"]["compression"] = []
 
-    with open(os.path.join("json_file", "ff_file_list.json")) as j_file:
-        ff_file = set(json.load(j_file))  # use set for faster lookup
-
     count = 0
     accuracy = 0
     model = load_genconvit(config, net, ed_weight, vae_weight, fp16)
@@ -53,21 +50,17 @@ def faceforensics(ed_weight, vae_weight, root_dir="FaceForensics++", dataset=Non
 
             for filename in filenames:
                 curr_vid = os.path.join(dirpath, filename)
-                rel_path = os.path.relpath(curr_vid, root_dir).replace("\\", "/")
-                if rel_path in ff_file:
-                    compression = "c23" if "c23" in curr_vid else "c40"
-                    try:
-                        if is_video(curr_vid):
-                            result, accuracy, count, _ = predict(
-                                curr_vid, model, fp16, result, num_frames, net, klass,
-                                count, accuracy, label, compression
-                            )
-                        else:
-                            print(f"Invalid video file: {curr_vid}. Please provide a valid video file.")
-                    except Exception as e:
-                        print(f"An error occurred: {str(e)}")
-                else:
-                    print(f"Skipping: {rel_path} not in ff_file_list.json")
+                compression = "c23" if "c23" in curr_vid else "c40"
+                try:
+                    if is_video(curr_vid):
+                        result, accuracy, count, _ = predict(
+                            curr_vid, model, fp16, result, num_frames, net, klass,
+                            count, accuracy, label, compression
+                        )
+                    else:
+                        print(f"Invalid video file: {curr_vid}. Please provide a valid video file.")
+                except Exception as e:
+                    print(f"An error occurred: {str(e)}")
 
     return result
 
