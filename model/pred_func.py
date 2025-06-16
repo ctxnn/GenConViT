@@ -9,19 +9,47 @@ from tqdm import tqdm
 from dataset.loader import normalize_data
 from .config import load_config
 from .genconvit import GenConViT
+from .genconvit_v2 import GenConViTV2
 from decord import VideoReader, cpu
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
 
-def load_genconvit(config, net, ed_weight, vae_weight, fp16):
-    model = GenConViT(
-        config,
-        ed= ed_weight,
-        vae= vae_weight, 
-        net=net,
-        fp16=fp16
-    )
+def load_genconvit(config, net, ed_weight, vae_weight, fp16, arch_type='original', use_attention=True, use_residual=True):
+    """
+    Load either the original GenConViT model or the enhanced V2 architecture
+    
+    Args:
+        config: Model configuration dictionary
+        net: Network type ('ed', 'vae', 'genconvit', or 'v2')
+        ed_weight: Path to ED model weights
+        vae_weight: Path to VAE model weights
+        fp16: Whether to use half precision
+        arch_type: Architecture type ('original' or 'v2')
+        use_attention: Whether to use attention mechanism (for V2 only)
+        use_residual: Whether to use residual connections (for V2 only)
+    
+    Returns:
+        Loaded model
+    """
+    if arch_type == 'v2':
+        model = GenConViTV2(
+            config,
+            ed=ed_weight,
+            vae=vae_weight,
+            net=net,
+            fp16=fp16,
+            use_attention=use_attention,
+            use_residual=use_residual
+        )
+    else:
+        model = GenConViT(
+            config,
+            ed=ed_weight,
+            vae=vae_weight,
+            net=net,
+            fp16=fp16
+        )
 
     model.to(device)
     model.eval()
