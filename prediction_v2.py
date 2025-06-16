@@ -7,6 +7,8 @@ from model.pred_func import *
 from model.config import load_config
 from model.genconvit import GenConViT
 from model.genconvit_v2 import GenConViTV2
+import numpy as np
+from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
 
 config = load_config()
 print('CONFIG')
@@ -36,6 +38,13 @@ def load_model(config, arch_type, net, ed_weight, vae_weight, fp16, use_attentio
         print(f"Loading original GenConViT with net={net}")
         return GenConViT(config, ed_weight, vae_weight, net, fp16)
 
+def compute_metrics(y_true, y_pred):
+    acc = accuracy_score(y_true, y_pred)
+    prec = precision_score(y_true, y_pred, pos_label=1)
+    rec = recall_score(y_true, y_pred, pos_label=1)
+    f1 = f1_score(y_true, y_pred, pos_label=1)
+    return acc, prec, rec, f1
+
 def vids(
     ed_weight, vae_weight, root_dir="sample_prediction_data", dataset=None, 
     num_frames=15, net=None, fp16=False, arch_type='original', 
@@ -45,6 +54,8 @@ def vids(
     r = 0
     f = 0
     count = 0
+    y_true = []
+    y_pred = []
     
     model = load_model(config, arch_type, net, ed_weight, vae_weight, fp16, use_attention, use_residual)
 
@@ -53,6 +64,8 @@ def vids(
 
         try:
             if is_video(curr_vid):
+                # For sample data, assume filenames containing 'fake' are FAKE, else REAL
+                gt_label = 1 if 'fake' in filename.lower() else 0
                 result, accuracy, count, pred = predict(
                     curr_vid,
                     model,
@@ -63,7 +76,10 @@ def vids(
                     "uncategorized",
                     count,
                 )
-                f, r = (f + 1, r) if "FAKE" == real_or_fake(pred[0]) else (f, r + 1)
+                pred_label = 1 if real_or_fake(pred[0]) == 'FAKE' else 0
+                y_true.append(gt_label)
+                y_pred.append(pred_label)
+                f, r = (f + 1, r) if pred_label == 1 else (f, r + 1)
                 print(
                     f"Prediction: {pred[1]} {real_or_fake(pred[0])} \t\tFake: {f} Real: {r}"
                 )
@@ -73,6 +89,9 @@ def vids(
         except Exception as e:
             print(f"An error occurred: {str(e)}")
 
+    # Print metrics
+    if y_true and y_pred:
+        result = update_result_with_metrics(result, y_true, y_pred)
     return result
 
 
@@ -91,6 +110,8 @@ def faceforensics(
         "FaceSwap",
         "NeuralTextures",
     ]
+    y_true = []
+    y_pred = []
 
     # load files not used in the training set, the files are appended with compression type, _c23 or _c40
     with open(os.path.join("json_file", "ff_file_list.json")) as j_file:
@@ -106,14 +127,14 @@ def faceforensics(
                 filter(lambda x: x in dirpath.split(os.path.sep), ffdirs),
                 "original",
             )
-            label = "REAL" if klass == "original" else "FAKE"
+            label = 0 if klass == "original" else 1  # 0: REAL, 1: FAKE
             for filename in filenames:
                 try:
                     if filename in ff_file:
                         curr_vid = os.path.join(dirpath, filename)
                         compression = "c23" if "c23" in curr_vid else "c40"
                         if is_video(curr_vid):
-                            result, accuracy, count, _ = predict(
+                            result, accuracy, count, pred = predict(
                                 curr_vid,
                                 model,
                                 fp16,
@@ -123,15 +144,19 @@ def faceforensics(
                                 klass,
                                 count,
                                 accuracy,
-                                label,
+                                "REAL" if label == 0 else "FAKE",
                                 compression,
                             )
+                            pred_label = 1 if real_or_fake(pred[0]) == 'FAKE' else 0
+                            y_true.append(label)
+                            y_pred.append(pred_label)
                         else:
                             print(f"Invalid video file: {curr_vid}. Please provide a valid video file.")
 
                 except Exception as e:
                     print(f"An error occurred: {str(e)}")
-
+    if y_true and y_pred:
+        result = update_result_with_metrics(result, y_true, y_pred)
     return result
 
 
@@ -143,6 +168,8 @@ def dfdc(
     result = set_result()
     count = 0
     accuracy = 0
+    y_true = []
+    y_pred = []
 
     model = load_model(config, arch_type, net, ed_weight, vae_weight, fp16, use_attention, use_residual)
 
@@ -153,10 +180,10 @@ def dfdc(
     for filename in os.listdir(root_dir):
         if filename.endswith(".mp4") and filename in dfdc_file:
             curr_vid = os.path.join(root_dir, filename)
-
             try:
                 if is_video(curr_vid):
-                    result, accuracy, count, _ = predict(
+                    gt_label = 0 if filename.endswith("_0.mp4") else 1
+                    result, accuracy, count, pred = predict(
                         curr_vid,
                         model,
                         fp16,
@@ -166,14 +193,17 @@ def dfdc(
                         "dfdc",
                         count,
                         accuracy,
-                        "REAL" if filename.endswith("_0.mp4") else "FAKE",
+                        "REAL" if gt_label == 0 else "FAKE",
                     )
+                    pred_label = 1 if real_or_fake(pred[0]) == 'FAKE' else 0
+                    y_true.append(gt_label)
+                    y_pred.append(pred_label)
                 else:
                     print(f"Invalid video file: {curr_vid}. Please provide a valid video file.")
-
             except Exception as e:
                 print(f"An error occurred: {str(e)}")
-
+    if y_true and y_pred:
+        result = update_result_with_metrics(result, y_true, y_pred)
     return result
 
 
@@ -185,6 +215,8 @@ def timit(
     result = set_result()
     count = 0
     accuracy = 0
+    y_true = []
+    y_pred = []
 
     model = load_model(config, arch_type, net, ed_weight, vae_weight, fp16, use_attention, use_residual)
 
@@ -197,14 +229,13 @@ def timit(
             if "higher_quality" in dirpath.split(os.path.sep)
             else "real"
         )
-        label = "REAL" if klass == "real" else "FAKE"
+        label = 0 if klass == "real" else 1
         for filename in filenames:
             if filename.endswith(".mp4"):
                 curr_vid = os.path.join(dirpath, filename)
-
                 try:
                     if is_video(curr_vid):
-                        result, accuracy, count, _ = predict(
+                        result, accuracy, count, pred = predict(
                             curr_vid,
                             model,
                             fp16,
@@ -214,14 +245,22 @@ def timit(
                             klass,
                             count,
                             accuracy,
-                            label,
+                            "REAL" if label == 0 else "FAKE",
                         )
+                        pred_label = 1 if real_or_fake(pred[0]) == 'FAKE' else 0
+                        y_true.append(label)
+                        y_pred.append(pred_label)
                     else:
                         print(f"Invalid video file: {curr_vid}. Please provide a valid video file.")
-
                 except Exception as e:
                     print(f"An error occurred: {str(e)}")
-
+    if y_true and y_pred:
+        acc, prec, rec, f1 = compute_metrics(y_true, y_pred)
+        print(f"\nOverall Results:")
+        print(f"Accuracy: {acc:.4f}")
+        print(f"Precision: {prec:.4f}")
+        print(f"Recall: {rec:.4f}")
+        print(f"F1-score: {f1:.4f}")
     return result
 
 
@@ -233,6 +272,8 @@ def celeb(
     result = set_result()
     count = 0
     accuracy = 0
+    y_true = []
+    y_pred = []
 
     model = load_model(config, arch_type, net, ed_weight, vae_weight, fp16, use_attention, use_residual)
 
@@ -244,12 +285,11 @@ def celeb(
         ck_ = ck.split("/")
         klass = ck_[0]
         filename = ck_[1]
-        correct_label = "FAKE" if klass == "Celeb-synthesis" else "REAL"
+        correct_label = 1 if klass == "Celeb-synthesis" else 0
         vid = os.path.join(root_dir, ck)
-
         try:
             if is_video(vid):
-                result, accuracy, count, _ = predict(
+                result, accuracy, count, pred = predict(
                     vid,
                     model,
                     fp16,
@@ -259,14 +299,22 @@ def celeb(
                     klass,
                     count,
                     accuracy,
-                    correct_label,
+                    "FAKE" if correct_label == 1 else "REAL",
                 )
+                pred_label = 1 if real_or_fake(pred[0]) == 'FAKE' else 0
+                y_true.append(correct_label)
+                y_pred.append(pred_label)
             else:
                 print(f"Invalid video file: {vid}. Please provide a valid video file.")
-
         except Exception as e:
             print(f"An error occurred x: {str(e)}")
-
+    if y_true and y_pred:
+        acc, prec, rec, f1 = compute_metrics(y_true, y_pred)
+        print(f"\nOverall Results:")
+        print(f"Accuracy: {acc:.4f}")
+        print(f"Precision: {prec:.4f}")
+        print(f"Recall: {rec:.4f}")
+        print(f"F1-score: {f1:.4f}")
     return result
 
 
@@ -377,6 +425,44 @@ def gen_parser():
     return path, dataset, num_frames, net, fp16, ed_weight, vae_weight, arch_type, use_attention, use_residual
 
 
+def update_result_with_metrics(result, y_true, y_pred):
+    """
+    Update result dictionary with performance metrics
+    
+    Args:
+        result: The result dictionary to update
+        y_true: List of ground truth labels (0 for real, 1 for fake)
+        y_pred: List of predicted labels (0 for real, 1 for fake)
+        
+    Returns:
+        Updated result dictionary with metrics added
+    """
+    if not y_true or not y_pred or len(y_true) != len(y_pred):
+        return result
+        
+    acc, prec, rec, f1 = compute_metrics(y_true, y_pred)
+    print(f"\nOverall Results:")
+    print(f"Accuracy: {acc:.4f}")
+    print(f"Precision: {prec:.4f}")
+    print(f"Recall: {rec:.4f}")
+    print(f"F1-score: {f1:.4f}")
+    
+    # Add metrics to result dictionary
+    result["metrics"] = {
+        "accuracy": float(acc),
+        "precision": float(prec),
+        "recall": float(rec),
+        "f1_score": float(f1),
+        "total_samples": len(y_true),
+        "true_fake": int(sum(y_true)),
+        "true_real": int(len(y_true) - sum(y_true)),
+        "predicted_fake": int(sum(y_pred)),
+        "predicted_real": int(len(y_pred) - sum(y_pred))
+    }
+    
+    return result
+
+
 def main():
     start_time = perf_counter()
     path, dataset, num_frames, net, fp16, ed_weight, vae_weight, arch_type, use_attention, use_residual = gen_parser()
@@ -393,13 +479,41 @@ def main():
             net, fp16, arch_type, use_attention, use_residual
         )
 
+    # Add metadata about the run
+    if "metadata" not in result:
+        result["metadata"] = {}
+    
+    result["metadata"].update({
+        "architecture": arch_type,
+        "network": net,
+        "dataset": dataset,
+        "frames_processed": num_frames,
+        "ed_weight": ed_weight,
+        "vae_weight": vae_weight,
+        "fp16": fp16,
+        "timestamp": datetime.now().isoformat(),
+        "use_attention": use_attention if arch_type == "v2" else None,
+        "use_residual": use_residual if arch_type == "v2" else None
+    })
+
     curr_time = datetime.now().strftime("%B_%d_%Y_%H_%M_%S")
     file_path = os.path.join("result", f"prediction_{dataset}_{net}_{arch_type}_{curr_time}.json")
 
     with open(file_path, "w") as f:
-        json.dump(result, f)
+        json.dump(result, f, indent=2)
+        
+    print(f"\nResults saved to {file_path}")
+    
     end_time = perf_counter()
-    print("\n\n--- %s seconds ---" % (end_time - start_time))
+    run_time = end_time - start_time
+    print("\n\n--- %s seconds ---" % (run_time))
+    
+    # Add runtime to the result file
+    result["metadata"]["runtime_seconds"] = run_time
+    with open(file_path, "w") as f:
+        json.dump(result, f, indent=2)
+        
+    return file_path
 
 
 if __name__ == "__main__":
