@@ -40,20 +40,23 @@ class GenConViTV2(nn.Module):
         self.use_attention = use_attention
         self.use_residual = use_residual
         
+        # Get device (CUDA if available, else CPU)
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        
         # Initialize both models for the enhanced architecture
         try:
             self.model_ed = GenConViTED(config)
             self.model_vae = GenConViTVAE(config)
             
             # Load ED weights
-            self.checkpoint_ed = torch.load(f'weight/{ed}.pth', map_location=torch.device('cpu'))
+            self.checkpoint_ed = torch.load(f'weight/{ed}.pth', map_location=self.device)
             if 'state_dict' in self.checkpoint_ed:
                 self.model_ed.load_state_dict(self.checkpoint_ed['state_dict'])
             else:
                 self.model_ed.load_state_dict(self.checkpoint_ed)
             
             # Load VAE weights
-            self.checkpoint_vae = torch.load(f'weight/{vae}.pth', map_location=torch.device('cpu'))
+            self.checkpoint_vae = torch.load(f'weight/{vae}.pth', map_location=self.device)
             if 'state_dict' in self.checkpoint_vae:
                 self.model_vae.load_state_dict(self.checkpoint_vae['state_dict'])
             else:
@@ -62,6 +65,10 @@ class GenConViTV2(nn.Module):
             # Set models to evaluation mode
             self.model_ed.eval()
             self.model_vae.eval()
+            
+            # Move models to the same device
+            self.model_ed.to(self.device)
+            self.model_vae.to(self.device)
             
             if self.fp16:
                 self.model_ed.half()
@@ -75,7 +82,7 @@ class GenConViTV2(nn.Module):
             self.fusion = nn.Sequential(
                 SwiGLU(feature_dim * 2, feature_dim * 4, feature_dim),
                 nn.LayerNorm(feature_dim)
-            )
+            ).to(self.device)
             
             # Cross-attention between ED and VAE outputs
             if self.use_attention:
@@ -83,12 +90,16 @@ class GenConViTV2(nn.Module):
                     embed_dim=feature_dim, 
                     num_heads=8, 
                     batch_first=True
-                )
+                ).to(self.device)
                 
         except FileNotFoundError as e:
             raise Exception(f"Error: Model weights file not found: {str(e)}")
 
     def forward(self, x):
+        # Ensure input is on the same device as model
+        device = next(self.parameters()).device
+        x = x.to(device)
+        
         # Get outputs from both models
         x_ed = self.model_ed(x)
         x_vae, _ = self.model_vae(x)

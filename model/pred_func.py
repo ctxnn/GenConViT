@@ -32,6 +32,10 @@ def load_genconvit(config, net, ed_weight, vae_weight, fp16, arch_type='original
     Returns:
         Loaded model
     """
+    # Explicitly set the device to use
+    device_str = "cuda" if torch.cuda.is_available() else "cpu"
+    print(f"Using device: {device_str}")
+    
     if arch_type == 'v2':
         model = GenConViTV2(
             config,
@@ -51,6 +55,7 @@ def load_genconvit(config, net, ed_weight, vae_weight, fp16, arch_type='original
             fp16=fp16
         )
 
+    # Move model to device
     model.to(device)
     model.eval()
     if fp16:
@@ -88,17 +93,30 @@ def face_rec(frames, p=None, klass=None):
 
 
 def preprocess_frame(frame):
-    df_tensor = torch.tensor(frame, device=device).float()
+    # Create tensor on CPU first to avoid memory issues
+    df_tensor = torch.tensor(frame).float()
     df_tensor = df_tensor.permute((0, 3, 1, 2))
 
+    # Normalize the data
     for i in range(len(df_tensor)):
         df_tensor[i] = normalize_data()["vid"](df_tensor[i] / 255.0)
+
+    # Only move to GPU if available after preprocessing
+    if torch.cuda.is_available():
+        df_tensor = df_tensor.to(device)
 
     return df_tensor
 
 
 def pred_vid(df, model):
     with torch.no_grad():
+        # Get the device of the model parameters
+        model_device = next(model.parameters()).device
+        
+        # Ensure input tensor is on the same device as the model
+        if df.device != model_device:
+            df = df.to(model_device)
+            
         return max_prediction_value(torch.sigmoid(model(df).squeeze()))
 
 
