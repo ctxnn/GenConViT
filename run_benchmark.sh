@@ -41,17 +41,11 @@ echo "Frames to process: $FRAMES"
 echo "================================================================"
 
 # Run tests with different architectures
-echo -e "\n[1/4] Testing original GenConViT architecture..."
-python prediction_v2.py --p "$DATASET_PATH" --f "$FRAMES" --arch original
+echo -e "\n[1/2] Testing original GenConViT architecture..."
+python prediction_v2.py --p "$DATASET_PATH" --f "$FRAMES" --arch-type original
 
-echo -e "\n[2/4] Testing GenConViT V2 with attention and residual connections..."
-python prediction_v2.py --p "$DATASET_PATH" --f "$FRAMES" --arch v2
-
-echo -e "\n[3/4] Testing GenConViT V2 with no attention..."
-python prediction_v2.py --p "$DATASET_PATH" --f "$FRAMES" --arch v2 --no-attention
-
-echo -e "\n[4/4] Testing GenConViT V2 with no residual connections..."
-python prediction_v2.py --p "$DATASET_PATH" --f "$FRAMES" --arch v2 --no-residual
+echo -e "\n[2/2] Testing GenConViT V2 architecture (modified activations)..."
+python prediction_v2.py --p "$DATASET_PATH" --f "$FRAMES" --arch-type v2
 
 echo -e "\n\nGenerating comparison plots..."
 python plot_comparison.py --result-dir result --output-dir plots

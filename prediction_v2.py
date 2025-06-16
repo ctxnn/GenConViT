@@ -377,22 +377,23 @@ def gen_parser():
     
     parser.add_argument("--fp16", type=str, help="half precision support")
     
+    
     # New arguments for architecture selection and configuration
     parser.add_argument(
-        "--arch", type=str, choices=['original', 'v2'], default='original',
-        help="Architecture type: original or v2 (enhanced)"
+        "--arch-type", type=str, choices=['original', 'v2'], default='original',
+        help="Architecture type: original or v2 (modified activations only)"
     )
-    parser.add_argument("--no-attention", action="store_true", help="Disable attention mechanism for V2 architecture")
-    parser.add_argument("--no-residual", action="store_true", help="Disable residual connections for V2 architecture")
+    parser.add_argument("--use-attention", action="store_true", help="Enable attention mechanism (ignored in current V2 implementation)")
+    parser.add_argument("--use-residual", action="store_true", help="Enable residual connections (ignored in current V2 implementation)")
 
     args = parser.parse_args()
     path = args.p
     num_frames = args.f if args.f else 15
     dataset = args.d if args.d else "other"
     fp16 = True if args.fp16 else False
-    arch_type = args.arch
-    use_attention = not args.no_attention
-    use_residual = not args.no_residual
+    arch_type = args.arch_type
+    use_attention = args.use_attention
+    use_residual = args.use_residual
 
     net = 'genconvit'
     ed_weight = 'genconvit_ed_inference'

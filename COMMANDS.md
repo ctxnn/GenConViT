@@ -59,25 +59,26 @@ python prediction_v2.py --p sample_prediction_data --fp16 true
 ### Testing Original Architecture
 
 ```bash
-python prediction_v2.py --p sample_prediction_data --arch original
+python prediction_v2.py --p sample_prediction_data --arch-type original
 ```
 
-### Testing V2 Architecture with All Enhancements
+### Testing V2 Architecture (Modified Activations)
 
 ```bash
-python prediction_v2.py --p sample_prediction_data --arch v2
+python prediction_v2.py --p sample_prediction_data --arch-type v2
 ```
 
-### Testing V2 Without Attention Mechanism
+### Selecting Network Type
 
 ```bash
-python prediction_v2.py --p sample_prediction_data --arch v2 --no-attention
-```
+# For ED network only
+python prediction_v2.py --p sample_prediction_data --n ed
 
-### Testing V2 Without Residual Connections
+# For VAE network only
+python prediction_v2.py --p sample_prediction_data --n vae
 
-```bash
-python prediction_v2.py --p sample_prediction_data --arch v2 --no-residual
+# For combined networks (default)
+python prediction_v2.py --p sample_prediction_data --n genconvit
 ```
 
 ### Specifying Model Size
